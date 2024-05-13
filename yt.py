@@ -6,33 +6,37 @@ from youtube_transcript_api import YouTubeTranscriptApi
 
 # Load environment variables
 load_dotenv()
-os.getenv("GOOGLE_API_KEY")
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+api_key = os.getenv("GOOGLE_API_KEY")
+genai.configure(api_key=api_key)
 
-# Prompt for the Gemini-Pro model
-prompt = """You are a YouTube video summarizer. You will be taking the transcript text
-and summarizing the entire video and providing the important summary in points
-within 250 words. Please provide the summary of the text given here: """
+# Define the prompt for the Gemini-Pro model
+prompt = """You are a YouTube video summarizer. Summarize the transcript text
+of the entire video, highlighting key points in a concise format within 250 words.
+Summary of the provided text:"""
 
-# Get transcript data from a YouTube video
+# Function to retrieve transcript data from a YouTube video
 from youtube_transcript_api import TranscriptsDisabled
 
-def extract_transcript_details(youtube_video_url):
+def get_transcript(youtube_link, language_code='en'):
+    if "watch?v=" in youtube_link:
+        video_id = youtube_link.split("watch?v=")[1]
+    elif "youtu.be/" in youtube_link:
+        video_id = youtube_link.split("youtu.be/")[1]
+    else:
+        return "Invalid YouTube link"
+    
     try:
-        video_id = youtube_video_url.split("=")[1]
-        transcript_text = YouTubeTranscriptApi.get_transcript(video_id)
-        transcript = ""
-        for i in transcript_text:
-            transcript += " " + i["text"]
+        transcript_data = YouTubeTranscriptApi.get_transcript(video_id, languages=[language_code])
+        transcript = " ".join(segment["text"] for segment in transcript_data)
         return transcript
     except TranscriptsDisabled:
-        st.error(f"Subtitles are disabled for the video {youtube_video_url}. Please try a different video.")
+        st.error(f"Subtitles are disabled for the video {youtube_link}. Please try another video.")
         return None
     except Exception as e:
         st.error(f"An error occurred: {e}")
         return None
 
-# Generate summary using the Gemini-Pro model
+# Function to generate summary using the Gemini-Pro model
 def generate_gemini_content(transcript_text, prompt):
     model = genai.GenerativeModel("gemini-pro")
     response = model.generate_content(prompt + transcript_text)
@@ -41,16 +45,16 @@ def generate_gemini_content(transcript_text, prompt):
 def run_yt_model():
     st.title("YouTube Transcript to Detailed Notes Converter")
 
-    # Get YouTube video link from user
+    # User input for YouTube video link
     youtube_link = st.text_input("Enter YouTube Video Link:")
 
     if youtube_link:
-        video_id = youtube_link.split("=")[1]
+        video_id = youtube_link.split("=")[1] if "watch?v=" in youtube_link else youtube_link.split("youtu.be/")[1]
         st.image(f"http://img.youtube.com/vi/{video_id}/0.jpg", use_column_width=True)
 
-        # Generate detailed notes
+        # Button to generate detailed notes
         if st.button("Get Detailed Notes"):
-            transcript_text = extract_transcript_details(youtube_link)
+            transcript_text = get_transcript(youtube_link)
             if transcript_text:
                 summary = generate_gemini_content(transcript_text, prompt)
                 st.markdown("## Detailed Notes:")
